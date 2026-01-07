@@ -11,7 +11,7 @@ JENKINS_API_TOKEN = os.environ.get("JENKINS_API_TOKEN", "11d51b2afa6a93663e66720
 
 def create_pipeline_job(
     job_name: str,
-    message: str = "Hello World"
+    message: str
 ) -> dict:
     """
     Create a simple Jenkins pipeline job with one stage printing a message.
@@ -82,6 +82,7 @@ root_agent = Agent(
     - You have EXACTLY ONE tool available: create_pipeline_job
     - NEVER invent or guess tool names
     - If a pipeline needs to be created, you MUST call create_pipeline_job
+    - You MUST NEVER use placeholders like "function_name".
     - The tool arguments are:
     - job_name (string, required)
     - message (string, optional, default: "Hello World")
@@ -93,6 +94,7 @@ root_agent = Agent(
     1. Determine the pipeline name
     2. Call create_pipeline_job with that name
     3. Confirm creation in plain text
+    4. Do not invent tool names
 
     If the pipeline name is missing:
     - Ask the user for the pipeline name
