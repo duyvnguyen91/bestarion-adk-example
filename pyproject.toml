@@ -8,4 +8,5 @@ dependencies = [
     "google-adk>=1.12.0",
     "litellm>=1.76.0",
     "streamlit>=1.49.1",
+    "yfinance",
 ]

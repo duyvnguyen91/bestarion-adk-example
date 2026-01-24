@@ -1,5 +1,6 @@
 import requests
 import os
+import yfinance as yf
 from google.adk.agents import Agent, LlmAgent
 from dotenv import load_dotenv
 
@@ -8,6 +9,29 @@ load_dotenv()
 # Best model for fast iteration
 MODEL = "gemini-2.0-flash"
 ALPHAVANTAGE_API_KEY = os.environ["ALPHAVANTAGE_API_KEY"]
+
+def fetch_xau_ohlc(limit: int = 200) -> list:
+    df = yf.download(
+        "GC=F",
+        period="1y",
+        interval="1d",
+        progress=False,
+    )
+
+    if df.empty:
+        raise RuntimeError("Yahoo Finance returned no XAU/USD data")
+
+    candles = []
+
+    for _, row in df.tail(limit).iterrows():
+        candles.append({
+            "open": float(row["Open"]),
+            "high": float(row["High"]),
+            "low": float(row["Low"]),
+            "close": float(row["Close"]),
+        })
+
+    return candles
 
 def fetch_fx_ohlc(from_symbol: str, to_symbol: str = "USD", limit: int = 200) -> list:
     resp = requests.get(
@@ -116,6 +140,68 @@ def fetch_fx_snapshot(from_symbol: str, to_symbol: str = "USD") -> dict:
         "high_recent": max(c["high"] for c in candles[-20:]),
         "low_recent": min(c["low"] for c in candles[-20:]),
     }
+
+def fetch_xau_snapshot() -> dict:
+    candles = fetch_xau_ohlc()
+    closes = [c["close"] for c in candles]
+
+    return {
+        "pair": "XAU/USD",
+        "price": closes[-1],
+        "ema20": calculate_ema(closes[-20:], 20),
+        "ema50": calculate_ema(closes[-50:], 50),
+        "rsi14": calculate_rsi(closes),
+        "high_recent": max(c["high"] for c in candles[-20:]),
+        "low_recent": min(c["low"] for c in candles[-20:]),
+    }
+
+xau_agent = Agent(
+    name="XAUAnalyst",
+    model=MODEL,
+    tools=[fetch_xau_snapshot],
+    instruction="""
+    You are a professional XAU analyst.
+
+    Rules:
+    - You MAY call fetch_xau_snapshot when needed
+    - Analyze Forex only
+    - Use fetched data ONLY
+    - Do not invent technical indicators
+    - If only spot price is available, limit analysis to:
+    - Directional bias
+    - Volatility
+    - Spread quality
+
+    Interpretation rules:
+    - Trend:
+    - Bullish if price > EMA20 > EMA50 and RSI > 55
+    - Bearish if price < EMA20 < EMA50 and RSI < 45
+    - Otherwise Range
+    - Volatility:
+    - High if price is volatile (high recent range > 10%)
+    - Low if price is stable (high recent range < 5%)
+    - Spread quality:
+    - Good if spread is narrow (less than 1 pip)
+    - Bad if spread is wide (more than 10 pips)
+
+    Output format:
+
+    🌅 XAU Outlook
+
+    <XAU PAIR>:
+    - Price:
+    - EMA20 / EMA50:
+    - RSI14:
+    - Trend:
+    - Bias:
+    - Notes:
+
+    Bias must be ONE of:
+    - Buy
+    - Sell
+    - Wait
+    """
+)
 
 fx_agent = Agent(
     name="FXAnalyst",
@@ -227,6 +313,7 @@ root_agent = LlmAgent(
     Routing rules:
     - If the user mentions BTC, ETH or Crypto → transfer_to_agent(agent_name="CryptoAnalyst")
     - If the user mentions EUR/USD, or Forex → transfer_to_agent(agent_name="FXAnalyst")
+    - If the user mentions XAU/USD or XAU or Gold → transfer_to_agent(agent_name="XAUAnalyst")
     - If both are mentioned → call both agents, then summarize results
 
     STRICT RULES:
@@ -234,5 +321,5 @@ root_agent = LlmAgent(
     - ALWAYS delegate using transfer_to_agent
     - NEVER invent agent names
     """,
-    sub_agents=[fx_agent, crypto_agent] 
+    sub_agents=[fx_agent, crypto_agent, xau_agent] 
 )
