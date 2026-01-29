@@ -1,7 +1,13 @@
 import requests
 import os
 import yfinance as yf
+import pandas as pd
+import uuid
 from google.adk.agents import Agent, LlmAgent
+from google.adk.sessions import InMemorySessionService
+# from google.adk.apps import App
+from google.adk.runners import Runner
+from google.genai.types import Content, Part
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,14 +27,19 @@ def fetch_xau_ohlc(limit: int = 200) -> list:
     if df.empty:
         raise RuntimeError("Yahoo Finance returned no XAU/USD data")
 
+    # Handle MultiIndex columns if present
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    
+    df = df.tail(limit)
     candles = []
 
-    for _, row in df.tail(limit).iterrows():
+    for i in range(len(df)):
         candles.append({
-            "open": float(row["Open"]),
-            "high": float(row["High"]),
-            "low": float(row["Low"]),
-            "close": float(row["Close"]),
+            "open": float(df['Open'].iloc[i]),
+            "high": float(df['High'].iloc[i]),
+            "low": float(df['Low'].iloc[i]),
+            "close": float(df['Close'].iloc[i]),
         })
 
     return candles
@@ -323,3 +334,37 @@ root_agent = LlmAgent(
     """,
     sub_agents=[fx_agent, crypto_agent, xau_agent] 
 )
+
+session_service = InMemorySessionService()
+
+runner = Runner(
+    agent=root_agent,
+    app_name="market_agent",
+    session_service=session_service,
+)
+
+async def analyze_market(user_input: str) -> str:
+    user_id = "http_user"
+    session_id = str(uuid.uuid4())
+    
+    await session_service.create_session(
+        app_name="market_agent",
+        user_id=user_id,
+        session_id=session_id,
+    )
+
+    message = Content(parts=[Part(text=user_input)])
+
+    final_text = ""
+
+    for event in runner.run(
+        user_id=user_id,
+        session_id=session_id,
+        new_message=message,
+    ):
+        if event.is_final_response():
+            for part in getattr(event.content, "parts", []):
+                if hasattr(part, "text"):
+                    final_text += part.text
+
+    return final_text or "No output from agent"
