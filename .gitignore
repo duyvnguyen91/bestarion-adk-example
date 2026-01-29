@@ -12,3 +12,5 @@ wheels/
 .adk
 
 tfplan.json
+.terraform/
+.terraform.lock.hcl
