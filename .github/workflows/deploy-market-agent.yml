@@ -1,0 +1,54 @@
+name: Deploy market_agent to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'market_agent/**'
+      - '.github/workflows/deploy-market-agent.yml'
+  workflow_dispatch:
+
+env:
+  SERVICE_NAME: market-agent
+  REGION: asia-southeast1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          source: ./market_agent
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          env_vars: |
+            ALPHAVANTAGE_API_KEY=${{ secrets.ALPHAVANTAGE_API_KEY }}
+            GOOGLE_GENAI_USE_VERTEXAI=${{ secrets.GOOGLE_GENAI_USE_VERTEXAI }}
+            GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
+          env_vars_update_strategy: overwrite
+
+      - name: Show service URL
+        run: |
+          echo "Deployed to Cloud Run"
+          gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --format='value(status.url)'
