@@ -44,6 +44,8 @@ jobs:
             ALPHAVANTAGE_API_KEY=${{ secrets.ALPHAVANTAGE_API_KEY }}
             GOOGLE_GENAI_USE_VERTEXAI=${{ secrets.GOOGLE_GENAI_USE_VERTEXAI }}
             GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
+            TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+            TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
           env_vars_update_strategy: overwrite
 
       - name: Show service URL
